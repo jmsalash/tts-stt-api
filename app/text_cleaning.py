@@ -45,6 +45,15 @@ def clean_tts_text(text: str) -> str:
     t = _SPOKEN_SYMBOLS.sub(" ", t)
     t = _NEWLINES.sub(". ", t)   # paragraph breaks become sentence pauses
     t = _EMPTY_PARENS.sub(" ", t)
+
+    # Periods *inside* a token are spoken as "dot" (domains, emails,
+    # abbreviations). "word.Word" -> sentence break; other in-token dots -> space.
+    # Decimals (digit.digit) are left so they read naturally as "point".
+    t = re.sub(r"(?<=[A-Za-z])\.(?=[A-Z])", ". ", t)
+    t = re.sub(r"(?<=[A-Za-z])\.(?=[a-z])", " ", t)
+    t = re.sub(r"(?<=[A-Za-z])\.(?=\d)", " ", t)
+    t = re.sub(r"(?<=\d)\.(?=[A-Za-z])", " ", t)
+
     t = _SPACES.sub(" ", t)
     t = re.sub(r"\s+([,.;:!?])", r"\1", t)  # drop space before punctuation
     t = re.sub(r"\.{2,}", ".", t)           # ellipsis / joined periods -> "."

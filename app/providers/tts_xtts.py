@@ -1,4 +1,5 @@
 import logging
+import re
 import threading
 
 import numpy as np
@@ -8,6 +9,36 @@ from app.emotions import xtts_prosody
 from app.providers.base import AudioResult, TTSProvider, Voice
 
 log = logging.getLogger(__name__)
+
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?…])\s+")
+
+
+def _chunk_text(text: str, max_len: int = 220) -> list[str]:
+    """Split into sentences, then merge adjacent ones into chunks up to max_len.
+
+    XTTS becomes unstable on tiny fragments (it may read the period aloud or
+    hallucinate), so we avoid 1-word utterances by packing short sentences
+    together, while still breaking up genuinely long text.
+    """
+    text = text.strip()
+    if not text:
+        return []
+    chunks: list[str] = []
+    current = ""
+    for part in _SENTENCE_SPLIT.split(text):
+        part = part.strip()
+        if not part:
+            continue
+        if not current:
+            current = part
+        elif len(current) + 1 + len(part) <= max_len:
+            current += " " + part
+        else:
+            chunks.append(current)
+            current = part
+    if current:
+        chunks.append(current)
+    return chunks or [text]
 
 XTTS_LANGUAGES = [
     "en", "es", "fr", "de", "it", "pt", "pl", "tr", "ru",
@@ -109,12 +140,13 @@ class XTTSProvider(TTSProvider):
         final_speed = speed * (emo_speed or 1.0)
         temperature = params.get("temperature", emo_temp if emo_temp is not None else 0.70)
 
+        # We do our own sentence-aware chunking and disable XTTS's internal
+        # splitter, which over-fragments short text and triggers artefacts.
         kwargs = dict(
-            text=text,
             language=language,
             speed=float(final_speed),
             temperature=float(temperature),
-            split_sentences=True,
+            split_sentences=False,
         )
 
         custom = self._custom_voices()
@@ -131,6 +163,12 @@ class XTTSProvider(TTSProvider):
             if opt in params:
                 kwargs[opt] = params[opt]
 
-        wav = model.tts(**kwargs)
-        samples = np.asarray(wav, dtype=np.float32)
+        chunks = _chunk_text(text)
+        gap = np.zeros(int(0.15 * self._sr), dtype=np.float32)
+        pieces: list[np.ndarray] = []
+        for chunk in chunks:
+            wav = np.asarray(model.tts(text=chunk, **kwargs), dtype=np.float32)
+            pieces.append(wav)
+            pieces.append(gap)
+        samples = np.concatenate(pieces[:-1]) if pieces else np.zeros(0, dtype=np.float32)
         return AudioResult(samples=samples, sample_rate=self._sr)
