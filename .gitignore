@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local config / secrets
+.env
+
+# Runtime data: model cache, uploaded reference voices, generated audio
+data/
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.opus
+
+# Logs / OS
+*.log
+.DS_Store

@@ -1,0 +1,13 @@
+# Local TTS (XTTS-v2). Heavy: pulls PyTorch (~2.5GB) + downloads a ~1.8GB model
+# on first use. Install AFTER requirements.txt.
+#
+# For GPU (CUDA 12.x) install torch first from the CUDA index, e.g.:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+# then:
+#   pip install -r requirements-tts.txt
+coqui-tts>=0.27.0
+# torchaudio must match the installed torch (install from the same CUDA index).
+torchaudio==2.5.1
+# coqui-tts's "transformers>=4.57" pin is too loose: transformers 5.x removed
+# isin_mps_friendly, which XTTS imports. Keep it on the 4.57.x line.
+transformers>=4.57,<5
