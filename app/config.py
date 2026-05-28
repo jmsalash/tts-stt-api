@@ -13,7 +13,10 @@ class Settings(BaseSettings):
     # --- server ---
     host: str = "0.0.0.0"
     port: int = 8000
-    # Comma-separated bearer tokens. Empty => auth disabled.
+    # Bearer-token auth (optional). Empty => auth disabled.
+    # `api_key` is a single key (gemma4-style); `api_keys` is a comma-separated
+    # list. Both are accepted and merged.
+    api_key: str = ""
     api_keys: str = ""
     cors_origins: str = "*"
     max_upload_mb: int = 50
@@ -50,7 +53,10 @@ class Settings(BaseSettings):
 
     @property
     def api_key_set(self) -> set[str]:
-        return {k.strip() for k in self.api_keys.split(",") if k.strip()}
+        keys = {k.strip() for k in self.api_keys.split(",") if k.strip()}
+        if self.api_key.strip():
+            keys.add(self.api_key.strip())
+        return keys
 
     @property
     def cors_origin_list(self) -> list[str]:

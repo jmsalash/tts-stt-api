@@ -87,7 +87,9 @@ defaults). Key options:
 | `WHISPER_MODEL` | `small` | `tiny`/`base`/`small`/`medium`/`large-v3` |
 | `WHISPER_DEVICE` | `auto` | `auto`/`cuda`/`cpu` |
 | `XTTS_DEVICE` | `auto` | `auto`/`cuda`/`cpu` |
-| `API_KEYS` | _(empty)_ | Comma-separated bearer tokens; empty disables auth |
+| `API_KEY` | _(empty)_ | If set, require `Authorization: Bearer <key>` |
+| `API_KEYS` | _(empty)_ | Comma-separated bearer tokens (alternative to `API_KEY`) |
+| `SSL_CERTFILE` / `SSL_KEYFILE` | _(empty)_ | Set both to serve over HTTPS |
 | `ELEVENLABS_API_KEY` | _(empty)_ | Enables the ElevenLabs TTS provider |
 | `OPENAI_API_KEY` | _(empty)_ | Enables the OpenAI STT provider |
 
@@ -104,10 +106,60 @@ Open <http://localhost:8000> for the web UI.
 > Note: the browser microphone (record / live streaming) requires a *secure
 > context* — `http://localhost` works; remote access needs HTTPS.
 
+## Authentication (optional)
+
+Auth is off by default. To require a key, set `API_KEY=your-secret` (env or
+`.env`) and restart. Every request must then include:
+
+```
+Authorization: Bearer your-secret
+```
+
+For the WebSocket streaming endpoint, pass the key as a query parameter instead
+(`?token=your-secret`), since browsers can't set custom headers on a WebSocket.
+In the web UI, enter the key under **Settings** (it's stored in your browser).
+To turn auth off, clear `API_KEY`/`API_KEYS` and restart.
+
+```bash
+curl -H "Authorization: Bearer your-secret" \
+  -X POST http://localhost:8000/v1/tts \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"Authenticated request","format":"mp3"}' --output speech.mp3
+```
+
+## HTTPS / TLS (optional)
+
+Two common ways to serve over `https`:
+
+**1. Directly via uvicorn** (simplest for LAN/dev). Generate a self-signed cert,
+then set the two env vars and `run.sh` serves over TLS:
+
+```bash
+openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem \
+  -days 365 -subj "/CN=localhost"
+SSL_CERTFILE=./cert.pem SSL_KEYFILE=./key.pem ./run.sh
+```
+
+Browsers warn on self-signed certs (accept once). For a *trusted* LAN cert with
+no warning, use [`mkcert`](https://github.com/FiloSottile/mkcert).
+
+**2. Behind a reverse proxy** (recommended for anything real). Run the app on
+plain HTTP bound to `127.0.0.1`, and put [Caddy](https://caddyserver.com) or
+nginx in front to terminate TLS (Caddy auto-provisions Let's Encrypt certs if
+you have a domain). Example `Caddyfile`:
+
+```
+your.domain { reverse_proxy 127.0.0.1:8000 }
+```
+
+When served over HTTPS, the web UI's same-origin calls (including the WebSocket,
+which switches to `wss://`) use HTTPS automatically.
+
 ## API reference
 
-All examples assume no auth. If `API_KEYS` is set, add
+All examples assume no auth. If `API_KEY`/`API_KEYS` is set, add
 `-H "Authorization: Bearer <token>"` (and `?token=<token>` for the WebSocket).
+See [Authentication](#authentication-optional) for details.
 
 ### `GET /health`
 Service status, current providers, supported formats and emotions.
