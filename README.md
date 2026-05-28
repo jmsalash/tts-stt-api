@@ -85,6 +85,7 @@ defaults). Key options:
 | `TTS_PROVIDER` | `xtts` | `xtts` (local) or `elevenlabs` (cloud) |
 | `STT_PROVIDER` | `faster_whisper` | `faster_whisper` (local) or `openai` (cloud) |
 | `WHISPER_MODEL` | `small` | `tiny`/`base`/`small`/`medium`/`large-v3` |
+| `TTS_SANITIZE_TEXT` | `true` | Strip markdown/symbols/emoji so they aren't spoken |
 | `WHISPER_DEVICE` | `auto` | `auto`/`cuda`/`cpu` |
 | `XTTS_DEVICE` | `auto` | `auto`/`cuda`/`cpu` |
 | `API_KEY` | _(empty)_ | If set, require `Authorization: Bearer <key>` |
@@ -187,8 +188,13 @@ curl -X POST localhost:8000/v1/tts \
 ```
 
 Body fields: `text` (required), `voice`, `language`, `emotion`, `speed`
-(0.5–2.0), `format` (`wav`/`flac`/`ogg`/`mp3`/`opus`), `params` (advanced,
-provider-specific, e.g. `temperature`).
+(0.5–2.0), `format` (`wav`/`flac`/`ogg`/`mp3`/`opus`), `sanitize` (override text
+cleaning, see below), `params` (advanced, provider-specific, e.g. `temperature`).
+
+**Text handling:** by default the server strips markdown and symbols that would
+otherwise be spoken aloud (e.g. `**bold**`, `#`, `@`, emoji) while keeping normal
+sentence punctuation (`. , ! ? ; :`) for natural prosody. Disable globally with
+`TTS_SANITIZE_TEXT=false` or per request with `"sanitize": false`.
 
 ### `POST /v1/voices` — voice cloning
 Upload a short, clean reference clip; reuse its `id` as the `voice` in `/v1/tts`.

@@ -26,6 +26,7 @@ from app.config import get_settings
 from app.emotions import SUPPORTED_EMOTIONS
 from app.providers.registry import get_stt_provider, get_tts_provider, reset_stt, reset_tts
 from app.providers.tts_xtts import XTTS_LANGUAGES
+from app.text_cleaning import clean_tts_text
 from app.schemas import (
     ConfigUpdate,
     HealthResponse,
@@ -160,10 +161,15 @@ def synthesize(req: TTSRequest):
     fmt = req.format.lower()
     if fmt not in SUPPORTED_FORMATS:
         raise HTTPException(status_code=400, detail=f"format must be one of {SUPPORTED_FORMATS}")
+    do_clean = settings.tts_sanitize_text if req.sanitize is None else req.sanitize
+    text = clean_tts_text(req.text) if do_clean else req.text
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="Text is empty after cleaning.")
+
     provider = get_tts_provider()
     try:
         result = provider.synthesize(
-            text=req.text,
+            text=text,
             voice=req.voice,
             language=req.language,
             emotion=req.emotion,

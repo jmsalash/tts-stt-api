@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     stt_provider: str = "faster_whisper"  # faster_whisper | openai
 
     default_language: str = "en"
+    # Strip markdown/symbols before synthesis so they aren't read aloud.
+    tts_sanitize_text: bool = True
 
     # --- storage ---
     voices_dir: Path = BASE_DIR / "data" / "voices"

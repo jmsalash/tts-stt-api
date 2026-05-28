@@ -13,6 +13,9 @@ class TTSRequest(BaseModel):
     )
     speed: float = Field(1.0, ge=0.5, le=2.0)
     format: str = Field("wav", description=f"One of: {', '.join(SUPPORTED_FORMATS)}")
+    sanitize: bool | None = Field(
+        None, description="Strip markdown/symbols so they aren't spoken. Defaults to server setting."
+    )
     # advanced, provider-specific (temperature, top_k, model_id, ...)
     params: dict = Field(default_factory=dict)
 
