@@ -10,35 +10,73 @@ from app.providers.base import AudioResult, TTSProvider, Voice
 
 log = logging.getLogger(__name__)
 
-_SENTENCE_SPLIT = re.compile(r"(?<=[.!?…])\s+")
+# XTTS truncates text past a per-language character limit per generation, so we
+# chunk under it. Values mirror coqui's tokenizer limits, with a small margin.
+_CHAR_LIMITS = {
+    "en": 230, "de": 230, "fr": 250, "es": 220, "it": 200, "pt": 190,
+    "pl": 210, "zh-cn": 78, "ar": 160, "cs": 180, "ru": 175, "nl": 230,
+    "tr": 210, "hu": 210, "ko": 90, "ja": 66, "hi": 140,
+}
+_DEFAULT_LIMIT = 200
+
+# sentence terminators: ASCII (need trailing space) + CJK (no spaces in JA/ZH)
+_PRIMARY_SPLIT = re.compile(r"(?<=[。！？])\s*|(?<=[.!?…])\s+")
+# secondary breakpoints for over-long sentences
+_SECONDARY_SPLIT = re.compile(r"(?<=[、，,;:])\s*")
 
 
-def _chunk_text(text: str, max_len: int = 220) -> list[str]:
+def char_limit(language: str) -> int:
+    return _CHAR_LIMITS.get((language or "").lower(), _DEFAULT_LIMIT)
+
+
+def _pack(units: list[str], max_len: int) -> list[str]:
+    chunks: list[str] = []
+    current = ""
+    for u in units:
+        if not u:
+            continue
+        if not current:
+            current = u
+        elif len(current) + 1 + len(u) <= max_len:
+            current += " " + u
+        else:
+            chunks.append(current)
+            current = u
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def _split_long(sentence: str, max_len: int) -> list[str]:
+    if len(sentence) <= max_len:
+        return [sentence]
+    parts = _pack([p.strip() for p in _SECONDARY_SPLIT.split(sentence)], max_len)
+    out: list[str] = []
+    for p in parts:  # hard-split anything still too long (no usable breakpoints)
+        while len(p) > max_len:
+            out.append(p[:max_len])
+            p = p[max_len:]
+        if p:
+            out.append(p)
+    return out
+
+
+def _chunk_text(text: str, max_len: int = _DEFAULT_LIMIT) -> list[str]:
     """Split into sentences, then merge adjacent ones into chunks up to max_len.
 
     XTTS becomes unstable on tiny fragments (it may read the period aloud or
     hallucinate), so we avoid 1-word utterances by packing short sentences
-    together, while still breaking up genuinely long text.
+    together, while still breaking up text past the per-language length limit.
     """
     text = text.strip()
     if not text:
         return []
-    chunks: list[str] = []
-    current = ""
-    for part in _SENTENCE_SPLIT.split(text):
-        part = part.strip()
-        if not part:
-            continue
-        if not current:
-            current = part
-        elif len(current) + 1 + len(part) <= max_len:
-            current += " " + part
-        else:
-            chunks.append(current)
-            current = part
-    if current:
-        chunks.append(current)
-    return chunks or [text]
+    units: list[str] = []
+    for sentence in _PRIMARY_SPLIT.split(text):
+        sentence = sentence.strip()
+        if sentence:
+            units.extend(_split_long(sentence, max_len))
+    return _pack(units, max_len) or [text]
 
 XTTS_LANGUAGES = [
     "en", "es", "fr", "de", "it", "pt", "pl", "tr", "ru",
@@ -163,7 +201,7 @@ class XTTSProvider(TTSProvider):
             if opt in params:
                 kwargs[opt] = params[opt]
 
-        chunks = _chunk_text(text)
+        chunks = _chunk_text(text, max_len=char_limit(language))
         gap = np.zeros(int(0.15 * self._sr), dtype=np.float32)
         pieces: list[np.ndarray] = []
         for chunk in chunks:

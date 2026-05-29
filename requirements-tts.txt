@@ -11,3 +11,6 @@ torchaudio==2.5.1
 # coqui-tts's "transformers>=4.57" pin is too loose: transformers 5.x removed
 # isin_mps_friendly, which XTTS imports. Keep it on the 4.57.x line.
 transformers>=4.57,<5
+# Japanese (XTTS "ja") tokenization: MeCab via cutlet + a bundled dictionary.
+cutlet>=0.4
+unidic-lite>=1.0.8
